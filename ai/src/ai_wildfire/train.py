@@ -6,7 +6,7 @@ from .data_loader import load_firms_table
 from .features import build_feature_matrix
 from .utils import set_seed, evaluate_model
 from .model_store import save_model
-from .configs import RANDOM_SEED
+from .configs import RANDOM_SEED, ARTIFACT_DIR, METRICS_FILENAME
 
 @click.command()
 @click.option("--limit", default=None, help="Limit rows to load (for quick dev)")
@@ -27,10 +27,9 @@ def train(limit, test_size):
     print("Model saved to", save_path)
     # persist metrics for CI artifact inspection
     import json, os
-    from pathlib import Path
-    artifact_dir = os.path.join(Path(__file__).resolve().parents[2], "artifacts")
-    os.makedirs(artifact_dir, exist_ok=True)
-    with open(os.path.join(artifact_dir, "metrics.json"), "w") as f:
+    os.makedirs(ARTIFACT_DIR, exist_ok=True)
+
+    with open(ARTIFACT_DIR / METRICS_FILENAME, "w") as f:
         json.dump({"metrics": metrics}, f, indent=2)
 
 if __name__ == "__main__":

@@ -1,20 +1,24 @@
-import json
 from .model_store import load_model
-from .features import basic_preprocess
-import pandas as pd
+from .features import build_feature_matrix
 from .data_loader import load_firms_table
 
 def predict_from_db(limit=10):
     df = load_firms_table(limit=limit)
-    df_proc = basic_preprocess(df)
-    X = df_proc[['bright_ti4','bright_ti5','frp','hour','lat_bin','lon_bin']].fillna(0)
+
+    X, _ = build_feature_matrix(df)    
     model = load_model()
-    probs = None
-    try:
-        probs = model.predict_proba(X)[:,1]
-    except Exception:
+    if hasattr(model, "predict_proba"):
+        probs = model.predict_proba(X)[:, 1]
+    else:
         probs = model.predict(X)
+
     df_out = df.copy()
-    df_out['pred_score'] = probs
-    print(df_out[['latitude','longitude','acq_date','acq_time','confidence','pred_score']].head(20))
+    df_out["pred_score"] = probs
+    df_out = df_out.sort_values("pred_score", ascending=False)
+    print(
+        df_out[
+            ["latitude", "longitude", "acq_date", "acq_time", "confidence", "pred_score"]
+        ].head(20)
+    )
+
     return df_out

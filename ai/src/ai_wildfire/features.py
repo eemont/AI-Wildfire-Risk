@@ -3,14 +3,20 @@ import numpy as np
 
 def confidence_to_bin(conf_series: pd.Series) -> pd.Series:
     """
-    Convert FIRMS confidence values into a binary label.
+    Convert source confidence values into a binary training label.
 
-    Your DB currently contains:
-      - 'n' (nominal) -> 0
-      - 'h' (high)    -> 1
+    Current definition:
+    - 1 = high-confidence detection
+    - 0 = non-high-confidence detection
 
-    Also supports common text labels (low/nominal/high) just in case
-    you ingest a different FIRMS product later.
+    Supported values:
+    - FIRMS: 'h' -> 1, 'n' -> 0
+    - Text labels: 'high' -> 1, 'medium'/'nominal'/'low' -> 0
+    - Unknown values default to 0
+
+    Note:
+    This is a baseline label for detection-confidence classification,
+    not a true wildfire ignition-risk label.
     """
     s = conf_series.astype(str).str.strip().str.lower()
 
@@ -20,6 +26,7 @@ def confidence_to_bin(conf_series: pd.Series) -> pd.Series:
         "low": 0,
         "nominal": 0,
         "high": 1,
+        "medium": 0,
         "l": 0,
     }
 
