@@ -1,9 +1,9 @@
 import logging
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi import HTTPException
-import duckdb
 import os
+
+import duckdb
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -35,14 +35,17 @@ CA_BOUNDS = {
     "max_lon": -114.0,
 }
 
+
 def compute_risk(brightness: float | None, frp: float | None) -> float:
     b = float(brightness or 0.0)
     f = float(frp or 0.0)
     return round((b * 0.6) + (f * 0.4), 2)
 
+
 @app.get("/")
 def root():
     return {"message": "AI Wildfire Tracker API is running"}
+
 
 @app.get("/health")
 def health():
@@ -54,6 +57,7 @@ def health():
         "db_path": DB_PATH,
     }
 
+
 @app.get("/fires")
 def get_fires(
     confidence: str | None = Query(default=None, description="Filter by confidence"),
@@ -64,10 +68,10 @@ def get_fires(
     valid_regions = ["ca", "us", None]
     if region is not None and region.lower() not in valid_regions:
         raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid region '{region}'. Must be one of: ca, us"
+            status_code=400,
+            detail=f"Invalid region '{region}'. Must be one of: ca, us",
         )
-    
+
     if not os.path.exists(DB_PATH):
         logger.warning("Database file does not exist: %s", DB_PATH)
         return []
