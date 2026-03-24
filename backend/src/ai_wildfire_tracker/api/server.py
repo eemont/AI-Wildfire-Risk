@@ -16,7 +16,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["*"],
+    allow_methods=["GET"],  # Lock this down to GET requests only
     allow_headers=["*"],
 )
 
@@ -62,6 +62,7 @@ def health():
 def get_fires(
     confidence: str | None = Query(default=None, description="Filter by confidence"),
     region: str | None = Query(default=None, description="Region filter, e.g. 'ca'"),
+    limit: int = Query(default=1000, ge=1, le=5000, description="Max results to return"),
 ):
     logger.info("GET /fires requested with confidence=%s region=%s", confidence, region)
 
@@ -121,8 +122,9 @@ def get_fires(
 
         query += """
             ORDER BY acq_date DESC, acq_time DESC
-            LIMIT 1000
+            LIMIT ?
         """
+        params.append(limit)
 
         rows = con.execute(query, params).fetchall()
         logger.info("Fetched %d fire rows", len(rows))
