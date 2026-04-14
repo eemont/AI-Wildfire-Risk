@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from ai_wildfire_tracker.api import server
 
-
 client = TestClient(server.app)
 
 
