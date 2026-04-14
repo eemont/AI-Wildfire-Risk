@@ -1,6 +1,6 @@
 import duckdb
-from fastapi.testclient import TestClient
 import pytest
+from fastapi.testclient import TestClient
 
 from ai_wildfire_tracker.api import server
 
