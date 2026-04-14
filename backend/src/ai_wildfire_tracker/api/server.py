@@ -122,9 +122,8 @@ def get_fires(
 
         query += """
             ORDER BY acq_date DESC, acq_time DESC
-            LIMIT ?
+            LIMIT 1000
         """
-        params.append(limit)
 
         rows = con.execute(query, params).fetchall()
         logger.info("Fetched %d fire rows", len(rows))
