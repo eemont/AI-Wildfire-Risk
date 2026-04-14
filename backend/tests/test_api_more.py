@@ -1,7 +1,6 @@
-# backend/tests/test_api_more.py
 import duckdb
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from ai_wildfire_tracker.api import server
 
