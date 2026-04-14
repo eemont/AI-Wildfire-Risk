@@ -192,16 +192,19 @@ def ingest_weather(limit: int = NWS_MAX_POINTS) -> int:
     # Pull unique lat/lon points from recent fire detections
     try:
         points_df = con.execute(
-            f"""
+            """
             SELECT DISTINCT
                 ROUND(latitude, 2)  AS lat,
                 ROUND(longitude, 2) AS lon
             FROM fires
-            WHERE latitude  BETWEEN {US_BOUNDS['min_lat']} AND {US_BOUNDS['max_lat']}
-              AND longitude BETWEEN {US_BOUNDS['min_lon']} AND {US_BOUNDS['max_lon']}
+            WHERE latitude  BETWEEN ? AND ?
+            AND longitude BETWEEN ? AND ?
             ORDER BY lat DESC
-            LIMIT {int(limit)}
-            """
+            LIMIT ?
+            """,
+            [US_BOUNDS["min_lat"], US_BOUNDS["max_lat"],
+            US_BOUNDS["min_lon"], US_BOUNDS["max_lon"],
+            int(limit)]
         ).df()
     except duckdb.CatalogException:
         logger.warning("fires table does not exist yet — run FIRMS ingest first")
@@ -262,7 +265,7 @@ def ingest_weather(limit: int = NWS_MAX_POINTS) -> int:
         time.sleep(NWS_RATE_LIMIT_SLEEP)
 
     if rows:
-        weather_df = pd.DataFrame(rows)
+        weather_df = pd.DataFrame(rows) # noqa: F841 — DuckDB references this by name
         con.execute("INSERT INTO weather_observations SELECT * FROM weather_df")
         logger.info("Inserted %d weather rows into %s", len(rows), DB_PATH)
     else:

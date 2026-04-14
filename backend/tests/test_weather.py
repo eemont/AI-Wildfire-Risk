@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -179,9 +178,8 @@ class TestIngestWeather:
     def test_missing_db_raises(self, tmp_path):
         missing = str(tmp_path / "nonexistent.db")
 
-        with patch("ai_wildfire_tracker.ingest.weather.DB_PATH", missing):
-            with pytest.raises(FileNotFoundError):
-                ingest_weather()
+        with patch("ai_wildfire_tracker.ingest.weather.DB_PATH", missing), pytest.raises(FileNotFoundError):
+            ingest_weather()
 
     def test_offshore_point_skipped(self, mem_db):
         with (
