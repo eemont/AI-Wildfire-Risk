@@ -1,6 +1,5 @@
 """
-weather.py — NWS weather ingestor for AI Wildfire Tracker
-backend/src/ai_wildfire_tracker/ingest/weather.py
+weather.py — NWS weather ingestor
 
 Fetches wind speed, relative humidity, and temperature for each fire detection
 point using the NOAA/NWS Gridpoint Forecast API (no API key required for
@@ -56,7 +55,7 @@ SESSION.headers.update({"User-Agent": NWS_USER_AGENT, "Accept": "application/geo
 
 
 # ---------------------------------------------------------------------------
-# Schema helpers
+# Schema
 # ---------------------------------------------------------------------------
 
 def ensure_weather_table(con: duckdb.DuckDBPyConnection) -> None:
