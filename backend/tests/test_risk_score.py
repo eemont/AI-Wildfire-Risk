@@ -1,5 +1,6 @@
 from ai_wildfire_tracker.api.server import compute_risk
 
+
 def test_compute_risk_increases_with_brightness():
     low = compute_risk(300.0, 20.0)
     high = compute_risk(350.0, 20.0)
