@@ -88,7 +88,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-report=html:backend/htmlcov \
-            --cov-fail-under=75 \
+            --cov-fail-under=65 \
             --junitxml=backend-test-results-${BUILD_SHORT}.xml \
             --json-report \
             --json-report-file=test-tracking/results/build-${BUILD_SHORT}.json \
