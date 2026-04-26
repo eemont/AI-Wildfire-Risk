@@ -185,9 +185,7 @@ class TestRiskScoringIntegration:
         fires = response.json()
         assert len(fires) > 0
         for fire in fires:
-            assert 0.0 <= fire["risk"] <= 1.0, (
-                f"Risk score out of valid range: {fire['risk']}"
-            )
+            assert 0.0 <= fire["risk"] <= 1.0, f"Risk score out of valid range: {fire['risk']}"
 
 
 class TestOrderingIntegration:
