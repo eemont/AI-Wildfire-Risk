@@ -5,7 +5,7 @@ from pathlib import Path
 
 import duckdb
 import joblib
-import numpy as np
+import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -40,6 +40,9 @@ _DEFAULT_MODEL_PATH = (
 )
 MODEL_PATH = Path(os.getenv("MODEL_PATH", str(_DEFAULT_MODEL_PATH)))
 
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
 REGION_BOUNDS = {
     "us": {"min_lat": 24.0, "max_lat": 49.5, "min_lon": -125.0, "max_lon": -66.5},
     "ca": {"min_lat": 32.5, "max_lat": 42.1, "min_lon": -124.5, "max_lon": -114.0},
@@ -60,29 +63,94 @@ CA_BOUNDS = REGION_BOUNDS["ca"]
 # ---------------------------------------------------------------------------
 
 _model = None
+_model_status = "not_loaded"
+_model_error: str | None = None
+
+
+class ModelUnavailableError(RuntimeError):
+    """Raised when RF scoring is required but the model cannot be loaded."""
+
+
+def _env_bool(name: str) -> bool | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+
+    normalized = value.strip().lower()
+    if normalized in _TRUE_VALUES:
+        return True
+    if normalized in _FALSE_VALUES:
+        return False
+
+    raise ValueError(f"{name} must be one of: true, false, 1, 0, yes, no, on, off")
+
+
+def _model_path_configured() -> bool:
+    return "MODEL_PATH" in os.environ
+
+
+def _fallback_enabled() -> bool:
+    configured = _env_bool("ALLOW_MODEL_FALLBACK")
+    if configured is not None:
+        return configured
+
+    # Local/dev defaults can run without an artifact, but an explicit MODEL_PATH
+    # means the caller expects RF inference and should not silently fall back.
+    return not _model_path_configured()
+
+
+def _mark_model_status(status: str, error: str | None = None) -> None:
+    global _model_status, _model_error
+    _model_status = status
+    _model_error = error
 
 
 def _load_model():
     """
     Load the trained Random Forest model from disk.
-    Called once at startup. Returns None if model file doesn't exist,
-    in which case the fallback formula is used.
+    Called once at startup. Returns None only when fallback mode is allowed.
     """
     global _model
     if _model is not None:
+        _mark_model_status("loaded")
         return _model
 
     if not MODEL_PATH.exists():
-        logger.warning("RF model not found at %s — using brightness formula fallback", MODEL_PATH)
-        return None
+        message = f"RF model not found at {MODEL_PATH}"
+        if _fallback_enabled():
+            _mark_model_status("fallback", message)
+            logger.warning("%s — using brightness formula fallback", message)
+            return None
+
+        _mark_model_status("unavailable", message)
+        logger.error("%s and fallback is disabled", message)
+        raise ModelUnavailableError(message)
 
     try:
         _model = joblib.load(MODEL_PATH)
+        _mark_model_status("loaded")
         logger.info("RF model loaded from %s", MODEL_PATH)
         return _model
     except Exception as exc:
-        logger.error("Failed to load RF model: %s", exc)
-        return None
+        message = f"Failed to load RF model from {MODEL_PATH}: {exc}"
+        if _fallback_enabled():
+            _mark_model_status("fallback", message)
+            logger.error("%s — using brightness formula fallback", message)
+            return None
+
+        _mark_model_status("unavailable", message)
+        logger.error("%s", message)
+        raise ModelUnavailableError(message) from exc
+
+
+def _health_status(model_loaded: bool) -> str:
+    if model_loaded:
+        return "ok"
+    if _fallback_enabled() and _model_status == "fallback":
+        return "degraded"
+    if _model_status == "unavailable":
+        return "error"
+    return "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -181,24 +249,24 @@ def compute_risk_batch(rows: list, weather_map: dict, env_map: dict) -> list[flo
         et0_mm = float(e.get("et0_mm", 0.0))
 
         features.append(
-            [
-                bright_ti4,
-                bright_ti5,
-                frp,
-                hour,
-                month,
-                lat_bin,
-                lon_bin,
-                wind_speed_kmh,
-                humidity_pct,
-                temp_c,
-                soil_moisture,
-                vpd_kpa,
-                et0_mm,
-            ]
+            {
+                "bright_ti4": bright_ti4,
+                "bright_ti5": bright_ti5,
+                "frp": frp,
+                "hour": hour,
+                "month": month,
+                "lat_bin": lat_bin,
+                "lon_bin": lon_bin,
+                "wind_speed_kmh": wind_speed_kmh,
+                "humidity_pct": humidity_pct,
+                "temp_c": temp_c,
+                "soil_moisture": soil_moisture,
+                "vpd_kpa": vpd_kpa,
+                "et0_mm": et0_mm,
+            }
         )
 
-    X = np.array(features, dtype=float)  # noqa: N806 — X is standard ML notation for feature matrix
+    X = pd.DataFrame(features, columns=_FEATURE_ORDER)  # noqa: N806
     probs = model.predict_proba(X)[:, 1]
     return [round(float(p), 4) for p in probs]
 
@@ -273,14 +341,25 @@ def root():
 @app.get("/health")
 def health():
     db_exists = os.path.exists(DB_PATH)
-    model_loaded = _model is not None
-    logger.info("Health check. db_exists=%s model_loaded=%s", db_exists, model_loaded)
+    try:
+        model_loaded = _load_model() is not None
+    except ModelUnavailableError:
+        model_loaded = False
+
+    logger.info(
+        "Health check. db_exists=%s model_loaded=%s model_status=%s",
+        db_exists,
+        model_loaded,
+        _model_status,
+    )
     return {
-        "status": "ok",
+        "status": _health_status(model_loaded),
         "database_exists": db_exists,
         "db_path": DB_PATH,
         "model_loaded": model_loaded,
         "model_path": str(MODEL_PATH),
+        "model_status": _model_status,
+        "fallback_enabled": _fallback_enabled(),
     }
 
 
@@ -377,7 +456,13 @@ def get_fires(
         con.close()
 
     # Compute RF risk scores for all rows in one batch
-    risk_scores = compute_risk_batch(rows, weather_map, env_map)
+    try:
+        risk_scores = compute_risk_batch(rows, weather_map, env_map)
+    except ModelUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="RF model is unavailable and fallback is disabled",
+        ) from exc
 
     return [
         {
