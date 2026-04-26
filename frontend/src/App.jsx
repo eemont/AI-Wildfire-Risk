@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "./index.css";
@@ -7,6 +7,63 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL;
 const US_BOUNDS = L.latLngBounds([[24, -125], [50, -66]]);
 const US_CENTER = [39.8283, -98.5795];
 const CONFIDENCE_OPTIONS = ["all", "high", "nominal", "low"];
+
+// ---------------------------------------------------------------------------
+// Heatmap layer — loads Leaflet.heat from CDN, renders RF risk-weighted points
+// ---------------------------------------------------------------------------
+
+function HeatmapLayer({ fires }) {
+  const map = useMap();
+  const heatRef = useRef(null);
+
+  useEffect(() => {
+    function addHeat() {
+      if (heatRef.current) {
+        map.removeLayer(heatRef.current);
+        heatRef.current = null;
+      }
+      const points = fires
+        .filter((f) => f.risk > 0)
+        .map((f) => [f.lat, f.lon, f.risk]);
+      if (points.length === 0) return;
+      heatRef.current = window.L.heatLayer(points, {
+        radius: 20,
+        blur: 15,
+        maxZoom: 10,
+        gradient: { 0.3: "blue", 0.6: "orange", 1.0: "red" },
+      }).addTo(map);
+    }
+
+    if (window.L.heatLayer) {
+      addHeat();
+    } else {
+      const existing = document.getElementById("leaflet-heat-script");
+      if (existing) {
+        existing.addEventListener("load", addHeat);
+      } else {
+        const script = document.createElement("script");
+        script.id = "leaflet-heat-script";
+        script.src =
+          "https://cdnjs.cloudflare.com/ajax/libs/Leaflet.heat/0.2.0/leaflet-heat.js";
+        script.onload = addHeat;
+        document.head.appendChild(script);
+      }
+    }
+
+    return () => {
+      if (heatRef.current) {
+        map.removeLayer(heatRef.current);
+        heatRef.current = null;
+      }
+    };
+  }, [fires, map]);
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Existing helper functions — unchanged
+// ---------------------------------------------------------------------------
 
 function normalizeConfidence(confidence) {
   const normalized = String(confidence ?? "").trim().toLowerCase();
@@ -63,25 +120,6 @@ function buildFireId(fire, index) {
     fire.frp ?? "na",
     index,
   ].join("|");
-}
-
-function isStaleFireData(events, staleDays = 2) {
-  if (!events || events.length === 0) return false;
-
-  const newestDate = events
-    .map((event) => {
-      const time = String(event.acq_time ?? "0000").padStart(4, "0");
-      return new Date(`${event.acq_date}T${time.slice(0, 2)}:${time.slice(2, 4)}:00`);
-    })
-    .filter((date) => !Number.isNaN(date.getTime()))
-    .sort((a, b) => b - a)[0];
-
-  if (!newestDate) return false;
-
-  const ageMs = Date.now() - newestDate.getTime();
-  const staleMs = staleDays * 24 * 60 * 60 * 1000;
-
-  return ageMs > staleMs;
 }
 
 function FitBounds({ fires }) {
@@ -146,6 +184,7 @@ export default function App() {
   const [sortKey, setSortKey] = useState("brightness");
   const [sortDir, setSortDir] = useState("desc");
   const [selectedEventId, setSelectedEventId] = useState(null);
+  const [showHeatmap, setShowHeatmap] = useState(true);
 
   const parsedMinBrightness = useMemo(() => {
     const parsed = Number(minBrightness);
@@ -172,8 +211,6 @@ export default function App() {
       })),
     [fires]
   );
-
-  const showStaleBanner = isStaleFireData(preparedFires);
 
   const filteredFires = useMemo(
     () =>
@@ -224,10 +261,6 @@ export default function App() {
         const apiBase = `${API_BASE || "/api"}`.replace(/\/$/, "");
         const url = new URL(`${apiBase}/fires`, window.location.origin);
         if (californiaOnly) url.searchParams.set("region", "ca");
-
-        console.log("API_BASE =", API_BASE);
-        console.log("Fetching URL =", url.toString());
-        
         const res = await fetch(url.toString(), { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
@@ -237,10 +270,9 @@ export default function App() {
         if (controller.signal.aborted) return;
         setErr(String(e));
       } finally {
-          if (!controller.signal.aborted) {
+        if (controller.signal.aborted) return;
         setLoading(false);
-          }
-        }
+      }
     }
     load();
 
@@ -258,14 +290,7 @@ export default function App() {
             {loading ? "Loading..." : `${filteredFires.length} points (of ${preparedFires.length} total)`}
           </span>
         </div>
-
       </header>
-
-      {showStaleBanner && !loading && !err && (
-        <div className="stale-data-banner" data-testid="stale-data-banner">
-          Wildfire data may be stale. Latest fire record is older than 2 days.
-        </div>
-      )}
 
       <div className="main-layout">
         <section className="controls-panel">
@@ -317,6 +342,19 @@ export default function App() {
             />
           </label>
 
+          <h3>Map Layers</h3>
+          <label htmlFor="heatmap-toggle" className="checkbox-row">
+            <input
+              id="heatmap-toggle"
+              data-testid="heatmap-toggle"
+              type="checkbox"
+              checked={showHeatmap}
+              onChange={(e) => setShowHeatmap(e.target.checked)}
+            />
+            Risk heatmap
+          </label>
+          <small>Heatmap weighted by AI risk score (blue → orange → red).</small>
+
           <h3>Legend</h3>
           <ul className="legend" data-testid="legend">
             <li>
@@ -331,14 +369,15 @@ export default function App() {
             <li>Marker radius scales with FRP (higher FRP = larger marker)</li>
           </ul>
         </section>
-<section className="map-panel">
+
+        <section className="map-panel">
           {err ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', backgroundColor: '#1e293b', color: '#f87171', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
-              <h2 style={{ fontSize: '24px', marginBottom: '10px' }}>⚠️ AI Tracking System Offline</h2>
-              <p style={{ color: '#cbd5e1', marginBottom: '20px' }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", backgroundColor: "#1e293b", color: "#f87171", padding: "40px", textAlign: "center", borderRadius: "8px" }}>
+              <h2 style={{ fontSize: "24px", marginBottom: "10px" }}>⚠️ AI Tracking System Offline</h2>
+              <p style={{ color: "#cbd5e1", marginBottom: "20px" }}>
                 We are currently unable to connect to the wildfire database. Please ensure the backend API is actively running.
               </p>
-              <p style={{ fontSize: '12px', color: '#64748b' }}>Developer Details: {err}</p>
+              <p style={{ fontSize: "12px", color: "#64748b" }}>Developer Details: {err}</p>
             </div>
           ) : (
             <>
@@ -354,11 +393,10 @@ export default function App() {
                 <FitBounds fires={filteredFires} />
                 <FocusOnSelectedFire fire={selectedFire} />
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 
-                contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-/>
-
+                  attribution="&copy; OpenStreetMap contributors"
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                {showHeatmap && <HeatmapLayer fires={filteredFires} />}
                 {sortedFires.map((fire) => {
                   const selected = fire.id === selectedEventId;
                   return (
@@ -377,7 +415,7 @@ export default function App() {
                       <Popup>
                         <div className="popup-content">
                           <div><b>Severity:</b> {fire.severity}</div>
-                          <div><b>Risk:</b> {fire.risk.toFixed(2)}</div>
+                          <div><b>Risk Score (AI):</b> {fire.risk.toFixed(4)}</div>
                           <div><b>Lat/Lon:</b> {fire.lat.toFixed(3)}, {fire.lon.toFixed(3)}</div>
                           <div><b>Brightness:</b> {fire.brightness}</div>
                           <div><b>FRP:</b> {fire.frp}</div>
@@ -434,7 +472,7 @@ export default function App() {
                   <div>
                     Brightness: {fire.brightness} | FRP: {fire.frp}
                   </div>
-                  <div>Risk: {fire.risk.toFixed(2)}</div>
+                  <div>Risk (AI): {fire.risk.toFixed(4)}</div>
                 </button>
               </li>
             ))}
