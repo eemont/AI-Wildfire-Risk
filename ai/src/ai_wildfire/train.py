@@ -87,7 +87,9 @@ def train(limit, test_size, n_estimators):
         X, y, test_size=test_size, random_state=RANDOM_SEED, stratify=y
     )
 
-    print(f"Training RandomForest (n_estimators={n_estimators}, class_weight=balanced)...")
+    print(
+        f"Training RandomForest (n_estimators={n_estimators}, class_weight=balanced)..."
+    )
     model = RandomForestClassifier(
         n_estimators=n_estimators,
         class_weight="balanced",

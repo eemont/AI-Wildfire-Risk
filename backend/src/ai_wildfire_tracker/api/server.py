@@ -27,7 +27,9 @@ DB_PATH = os.getenv("TEST_DB_PATH", os.getenv("DB_PATH", "wildfire.db"))
 
 # Model path — defaults to ai/artifacts relative to project root.
 # Override with MODEL_PATH env var for different environments.
-_DEFAULT_MODEL_PATH = Path(__file__).parent.parent.parent.parent / "ai" / "artifacts" / "baseline_model.joblib"
+_DEFAULT_MODEL_PATH = (
+    Path(__file__).parent.parent.parent.parent / "ai" / "artifacts" / "baseline_model.joblib"
+)
 MODEL_PATH = Path(os.getenv("MODEL_PATH", str(_DEFAULT_MODEL_PATH)))
 
 US_BOUNDS = {
@@ -61,9 +63,7 @@ def _load_model():
         return _model
 
     if not MODEL_PATH.exists():
-        logger.warning(
-            "RF model not found at %s — using brightness formula fallback", MODEL_PATH
-        )
+        logger.warning("RF model not found at %s — using brightness formula fallback", MODEL_PATH)
         return None
 
     try:
@@ -173,14 +173,25 @@ def compute_risk_batch(rows: list, weather_map: dict, env_map: dict) -> list[flo
         vpd_kpa = float(e.get("vpd_kpa", 0.0))
         et0_mm = float(e.get("et0_mm", 0.0))
 
-        features.append([
-            bright_ti4, bright_ti5, frp,
-            hour, month, lat_bin, lon_bin,
-            wind_speed_kmh, humidity_pct, temp_c,
-            soil_moisture, vpd_kpa, et0_mm,
-        ])
+        features.append(
+            [
+                bright_ti4,
+                bright_ti5,
+                frp,
+                hour,
+                month,
+                lat_bin,
+                lon_bin,
+                wind_speed_kmh,
+                humidity_pct,
+                temp_c,
+                soil_moisture,
+                vpd_kpa,
+                et0_mm,
+            ]
+        )
 
-    X = np.array(features, dtype=float) # noqa: N806 — X is standard ML notation for feature matrix
+    X = np.array(features, dtype=float)  # noqa: N806 — X is standard ML notation for feature matrix
     probs = model.predict_proba(X)[:, 1]
     return [round(float(p), 4) for p in probs]
 
@@ -188,6 +199,7 @@ def compute_risk_batch(rows: list, weather_map: dict, env_map: dict) -> list[flo
 # ---------------------------------------------------------------------------
 # Helper: load weather + environmental lookups from DB
 # ---------------------------------------------------------------------------
+
 
 def _build_weather_map(con: duckdb.DuckDBPyConnection) -> dict:
     """Build a lat/lon → weather dict from weather_observations table."""
@@ -245,6 +257,7 @@ def _build_env_map(con: duckdb.DuckDBPyConnection) -> dict:
 # API routes
 # ---------------------------------------------------------------------------
 
+
 @app.get("/")
 def root():
     return {"message": "AI Wildfire Tracker API is running"}
@@ -254,9 +267,7 @@ def root():
 def health():
     db_exists = os.path.exists(DB_PATH)
     model_loaded = _model is not None
-    logger.info(
-        "Health check. db_exists=%s model_loaded=%s", db_exists, model_loaded
-    )
+    logger.info("Health check. db_exists=%s model_loaded=%s", db_exists, model_loaded)
     return {
         "status": "ok",
         "database_exists": db_exists,
@@ -299,24 +310,34 @@ def get_fires(
             "latitude BETWEEN ? AND ?",
             "longitude BETWEEN ? AND ?",
         ]
-        params.extend([
-            US_BOUNDS["min_lat"], US_BOUNDS["max_lat"],
-            US_BOUNDS["min_lon"], US_BOUNDS["max_lon"],
-        ])
+        params.extend(
+            [
+                US_BOUNDS["min_lat"],
+                US_BOUNDS["max_lat"],
+                US_BOUNDS["min_lon"],
+                US_BOUNDS["max_lon"],
+            ]
+        )
 
         if confidence:
             where_clauses.append("lower(confidence) = lower(?)")
             params.append(confidence)
 
         if region and region.lower() == "ca":
-            where_clauses.extend([
-                "latitude BETWEEN ? AND ?",
-                "longitude BETWEEN ? AND ?",
-            ])
-            params.extend([
-                CA_BOUNDS["min_lat"], CA_BOUNDS["max_lat"],
-                CA_BOUNDS["min_lon"], CA_BOUNDS["max_lon"],
-            ])
+            where_clauses.extend(
+                [
+                    "latitude BETWEEN ? AND ?",
+                    "longitude BETWEEN ? AND ?",
+                ]
+            )
+            params.extend(
+                [
+                    CA_BOUNDS["min_lat"],
+                    CA_BOUNDS["max_lat"],
+                    CA_BOUNDS["min_lon"],
+                    CA_BOUNDS["max_lon"],
+                ]
+            )
 
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)

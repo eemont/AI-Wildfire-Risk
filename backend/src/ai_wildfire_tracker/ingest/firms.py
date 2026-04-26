@@ -33,7 +33,9 @@ US_BOUNDS = {
 }
 
 # Bounding box in FIRMS format: west,south,east,north
-US_BBOX = f"{US_BOUNDS['min_lon']},{US_BOUNDS['min_lat']},{US_BOUNDS['max_lon']},{US_BOUNDS['max_lat']}"
+US_BBOX = (
+    f"{US_BOUNDS['min_lon']},{US_BOUNDS['min_lat']},{US_BOUNDS['max_lon']},{US_BOUNDS['max_lat']}"
+)
 
 # Peak fire season windows — SP allows max 5 days per request.
 # 6 windows covering Aug 1-30 + Sep 1-30 + Oct 1-15 of 2024.
@@ -87,9 +89,7 @@ def ensure_fires_table(con: duckdb.DuckDBPyConnection) -> None:
 
 def _count_existing(con: duckdb.DuckDBPyConnection, date: str) -> int:
     try:
-        result = con.execute(
-            "SELECT COUNT(*) FROM fires WHERE acq_date = ?", [date]
-        ).fetchone()
+        result = con.execute("SELECT COUNT(*) FROM fires WHERE acq_date = ?", [date]).fetchone()
         return result[0] or 0
     except duckdb.CatalogException:
         return 0
@@ -133,9 +133,7 @@ def fetch_firms_window(
     try:
         df = pd.read_csv(url)
     except Exception as exc:
-        logger.error(
-            "FIRMS fetch failed for %s %s: %s", source, start_date or "latest", exc
-        )
+        logger.error("FIRMS fetch failed for %s %s: %s", source, start_date or "latest", exc)
         return pd.DataFrame()
 
     if df.empty:
@@ -217,9 +215,7 @@ def ingest_firms_historical(
             logger.info("Skipping %s — already have %d rows", start_date, existing)
             continue
 
-        df = fetch_firms_window(
-            api_key, source=source, start_date=start_date, day_range=day_range
-        )
+        df = fetch_firms_window(api_key, source=source, start_date=start_date, day_range=day_range)
 
         if df.empty:
             logger.warning("No data for window %s", start_date)
@@ -228,9 +224,7 @@ def ingest_firms_historical(
 
         con.execute("INSERT INTO fires SELECT * FROM df")
         total_inserted += len(df)
-        logger.info(
-            "Inserted %d rows for %s (%d days)", len(df), start_date, day_range
-        )
+        logger.info("Inserted %d rows for %s (%d days)", len(df), start_date, day_range)
         time.sleep(FIRMS_RATE_LIMIT_SLEEP)
 
     con.close()
