@@ -18,6 +18,7 @@ function HeatmapLayer({ fires }) {
 
   useEffect(() => {
     function addHeat() {
+      if (!window.L || !window.L.heatLayer) return;
       if (heatRef.current) {
         map.removeLayer(heatRef.current);
         heatRef.current = null;
@@ -212,6 +213,17 @@ export default function App() {
     [fires]
   );
 
+  const isStale = useMemo(() => {
+    if (preparedFires.length === 0) return false;
+    const dates = preparedFires
+      .map((f) => f.acq_date)
+      .filter(Boolean)
+      .map((d) => new Date(d));
+    const mostRecent = new Date(Math.max(...dates));
+    const daysDiff = (Date.now() - mostRecent) / (1000 * 60 * 60 * 24);
+    return daysDiff > 7;
+  }, [preparedFires]);
+
   const filteredFires = useMemo(
     () =>
       preparedFires.filter((f) => {
@@ -291,6 +303,11 @@ export default function App() {
           </span>
         </div>
       </header>
+      {isStale && (
+        <div data-testid="stale-data-banner" className="stale-banner">
+          ⚠️ Stale data — fire records are more than 7 days old.
+        </div>
+      )}
 
       <div className="main-layout">
         <section className="controls-panel">
