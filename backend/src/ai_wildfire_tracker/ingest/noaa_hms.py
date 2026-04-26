@@ -120,8 +120,27 @@ def ingest_noaa_hms() -> None:
     con = duckdb.connect(DB_PATH)
     try:
         ensure_fires_table(con)
-        con.execute("INSERT INTO fires SELECT * FROM normalized")
-        logger.info("Inserted %d NOAA HMS records into %s", len(normalized), DB_PATH)
+        count_before = con.execute("SELECT COUNT(*) FROM fires").fetchone()[0]
+        con.execute(
+            """
+            INSERT INTO fires
+            SELECT d.* FROM normalized d
+            WHERE NOT EXISTS (
+                SELECT 1 FROM fires f
+                WHERE f.latitude = d.latitude
+                  AND f.longitude = d.longitude
+                  AND f.acq_date = d.acq_date
+                  AND f.acq_time = d.acq_time
+            )
+            """
+        )
+        inserted = con.execute("SELECT COUNT(*) FROM fires").fetchone()[0] - count_before
+        logger.info(
+            "Inserted %d new NOAA HMS records (skipped %d duplicates) into %s",
+            inserted,
+            len(normalized) - inserted,
+            DB_PATH,
+        )
     finally:
         con.close()
 
