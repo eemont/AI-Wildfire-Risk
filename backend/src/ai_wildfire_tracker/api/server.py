@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import duckdb
@@ -7,7 +8,6 @@ import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
