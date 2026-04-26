@@ -231,6 +231,7 @@ def test_health_check_endpoint(client):
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
+
 """
 deleted compute risk from server.py
 def test_compute_risk_logic_boundaries(compute_risk):
