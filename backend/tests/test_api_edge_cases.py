@@ -240,3 +240,10 @@ def test_compute_risk_logic_boundaries(compute_risk):
     assert compute_risk(None, None) == 0.0
     assert compute_risk(350.0, None) == 210.0
 """
+
+
+def test_fallback_risk_returns_normalized_score():
+    from ai_wildfire_tracker.api.server import _fallback_risk
+
+    result = _fallback_risk(350.0, 50.0)
+    assert 0.0 <= result <= 1.0
