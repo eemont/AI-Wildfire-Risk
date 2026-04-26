@@ -69,9 +69,11 @@ def test_get_fires_region_ca_and_confidence_low_returns_matching_record():
     assert 32.5 <= data[0]["lat"] <= 42.1
     assert -124.5 <= data[0]["lon"] <= -114.0
 
+
 def test_get_fires_invalid_confidence_returns_400():
     response = client.get("/fires?confidence=veryhigh")
     assert response.status_code == 400
+
 
 def test_fire_values_have_expected_types():
     response = client.get("/fires")
