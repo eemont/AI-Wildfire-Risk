@@ -35,7 +35,7 @@ function HeatmapLayer({ fires }) {
       }).addTo(map);
     }
 
-    if (window.L.heatLayer) {
+    if (window.L && window.L.heatLayer) {
       addHeat();
     } else {
       const existing = document.getElementById("leaflet-heat-script");
