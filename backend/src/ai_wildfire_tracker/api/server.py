@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -32,6 +33,14 @@ app.add_middleware(
 )
 
 DB_PATH = os.getenv("TEST_DB_PATH", os.getenv("DB_PATH", "wildfire.db"))
+
+# ---------------------------------------------------------------------------
+# Operational metrics — module-level, reset on process restart
+# ---------------------------------------------------------------------------
+_PROCESS_START = time.time()
+_request_counts: dict[str, int] = {"fires": 0, "health": 0, "metrics": 0}
+_last_fires_response_ms: float | None = None
+_last_health_response_ms: float | None = None
 
 # Model path — defaults to ai/artifacts relative to project root.
 # Override with MODEL_PATH env var for different environments.
@@ -272,15 +281,31 @@ def root():
 
 @app.get("/health")
 def health():
+    global _last_health_response_ms
+    _t0 = time.perf_counter()
+    _request_counts["health"] += 1
     db_exists = os.path.exists(DB_PATH)
     model_loaded = _model is not None
     logger.info("Health check. db_exists=%s model_loaded=%s", db_exists, model_loaded)
-    return {
+    result = {
         "status": "ok",
         "database_exists": db_exists,
         "db_path": DB_PATH,
         "model_loaded": model_loaded,
         "model_path": str(MODEL_PATH),
+    }
+    _last_health_response_ms = round((time.perf_counter() - _t0) * 1000, 2)
+    return result
+
+
+@app.get("/metrics")
+def get_metrics():
+    _request_counts["metrics"] += 1
+    return {
+        "uptime_seconds": round(time.time() - _PROCESS_START, 1),
+        "request_counts": dict(_request_counts),
+        "last_fires_response_ms": _last_fires_response_ms,
+        "last_health_response_ms": _last_health_response_ms,
     }
 
 
@@ -289,6 +314,9 @@ def get_fires(
     confidence: str | None = Query(default=None, description="Filter by confidence"),
     region: str | None = Query(default=None, description="Region filter, e.g. 'ca'"),
 ):
+    global _last_fires_response_ms
+    _t0 = time.perf_counter()
+    _request_counts["fires"] += 1
     logger.info("GET /fires requested with confidence=%s region=%s", confidence, region)
 
     valid_regions = list(REGION_BOUNDS.keys())
@@ -379,7 +407,7 @@ def get_fires(
     # Compute RF risk scores for all rows in one batch
     risk_scores = compute_risk_batch(rows, weather_map, env_map)
 
-    return [
+    result = [
         {
             "lat": r[0],
             "lon": r[1],
@@ -392,3 +420,5 @@ def get_fires(
         }
         for i, r in enumerate(rows)
     ]
+    _last_fires_response_ms = round((time.perf_counter() - _t0) * 1000, 2)
+    return result
