@@ -44,7 +44,6 @@ def seeded_golden_db(tmp_path, monkeypatch, golden_df):
     con.execute("INSERT INTO fires SELECT * FROM golden_df")
     con.close()
     monkeypatch.setattr(configs, "DB_PATH", db_path)
-    monkeypatch.setattr(data_loader, "DB_PATH", db_path)
     return db_path
 
 
