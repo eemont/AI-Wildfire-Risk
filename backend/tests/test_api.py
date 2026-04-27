@@ -71,9 +71,10 @@ def test_health_endpoint():
     response = client.get("/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "ok"
+    assert data["status"] in {"ok", "degraded"}
     assert "database_exists" in data
     assert "db_path" in data
+    assert "model_status" in data
 
 
 def test_get_fires_returns_us_data_only():
