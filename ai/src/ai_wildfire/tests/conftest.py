@@ -6,7 +6,7 @@ import pytest
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 
-from ai_wildfire import configs, data_loader, model_store
+from ai_wildfire import configs, model_store
 from ai_wildfire.features import build_feature_matrix
 from ai_wildfire.utils import set_seed
 
