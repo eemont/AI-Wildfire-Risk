@@ -10,8 +10,7 @@ services:
       - .env.docker
     volumes:
       - ./data:/app/data
-      - ./ai/artifacts:/app/artifacts
-      - ./wildfire.db:/app/wildfire.db
+      - ./ai/artifacts:/ai/artifacts
     restart: unless-stopped
 
   # ── React Frontend ──────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@ URL format:
 import logging
 import os
 import time
+from datetime import date, timedelta
 
 import duckdb
 import pandas as pd
@@ -126,10 +127,11 @@ def fetch_firms_window(
         url = f"{FIRMS_BASE}/{api_key}/{source}/{US_BBOX}/{day_range}"
 
     logger.info(
-        "Fetching FIRMS %s: start=%s days=%d",
+        "Fetching FIRMS %s: start=%s days=%d url=%s",
         source,
         start_date or "latest",
         day_range,
+        url,
     )
 
     try:
@@ -177,7 +179,9 @@ def ingest_firms() -> int:
     if not api_key:
         raise RuntimeError("Missing FIRMS_API_KEY in .env")
 
-    df = fetch_firms_window(api_key, source="VIIRS_SNPP_NRT", day_range=1)
+    # Use yesterday's date explicitly — the "latest" no-date endpoint is unreliable.
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    df = fetch_firms_window(api_key, source="VIIRS_SNPP_NRT", start_date=yesterday, day_range=1)
 
     con = duckdb.connect(DB_PATH)
     try:

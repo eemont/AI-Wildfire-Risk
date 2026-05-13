@@ -1,13 +1,43 @@
 services:
+  # ── FastAPI Backend ──────────────────────────────────────────────────────────
   - type: web
     name: ai-wildfire-risk-backend
     env: docker
-    plan: free
+    plan: starter
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /health
+    disk:
+      name: wildfire-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: DB_PATH
         value: /data/wildfire.db
+      - key: MODEL_PATH
+        value: /data/model/baseline_model.joblib
+      - key: ALLOW_MODEL_FALLBACK
+        value: "true"
       - key: LOG_LEVEL
         value: INFO
+      - key: FIRMS_API_KEY
+        sync: false  # set in Render dashboard
+      - key: NWS_USER_AGENT
+        value: "ai-wildfire-tracker/1.0 (emmanuelmontoya02@gmail.com)"
+      - key: NOAA_HMS_CSV_URL
+        sync: false  # set in Render dashboard
+
+  # ── React Frontend ────────────────────────────────────────────────────────────
+  - type: web
+    name: ai-wildfire-risk-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false  # set to https://ai-wildfire-risk-backend.onrender.com after first deploy
