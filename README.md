@@ -1,5 +1,21 @@
 # AI Wildfire Tracker
 
+## Members:
+
+- Emmanuel Montoya Aguilar
+- Adolfo Corona
+- Brian Tamondong
+- Dylan Tran
+- Brian Zee
+
+
+## Video Link:
+
+https://youtu.be/DU5vV32tji8
+
+
+## About:
+
 Foundation scaffold for a Python-based AI Wildfire Tracker. This repo focuses on the early planning structure plus minimal starter code. The frontend will use React + Leaflet (JS/CSS and any other needed frontend languages) to visualize live data from the backend.
 
 ## Project goals (draft)
